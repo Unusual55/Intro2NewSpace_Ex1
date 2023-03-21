@@ -10,6 +10,7 @@ import Moon
 
 GR = 1.61803398875
 
+
 class Bereshit_101:
     # All this variable type is float.
     WEIGHT_EMP = 165  # kg
@@ -29,28 +30,30 @@ class Bereshit_101:
         self.dist = dist
         self.fuel = fuel
         self.ang = ang
+        self.input_parameters = {"vs": vs, "hs": hs, "dist": dist, "alt": alt, "fuel": fuel, "ang": ang}
         self.weight = Bereshit_101.WEIGHT_EMP + self.fuel
         self.time = 0
         self.dt = 1
         self.acc = 0
-        self.NN = 0.7 + random.uniform(-0.1, 0.1)
-        self.speed_update_rate = 0.003 + random.uniform(-0.001, 0.001)
+        self.NN = 0.7 + random.uniform(-0.15, 0.15)
+        self.speed_update_rate = 0.003 + random.uniform(-0.002, 0.002)
         self.output = dict()
+        self.random_parameters = dict()
         self.simulated = False
         self.fitness = 0
-        self.maintained_alt = 2000 + random.randrange(-250, 250)
+        self.maintained_alt = 2000 + random.randrange(-500, 500)
         self.more_braking_power = 25 + random.randrange(0, 5)
         self.less_braking_power = 20 + random.randrange(-2, 2)
-        self.slow_enough = 5
+        self.slow_enough = 5 + random.randrange(-2, 4)
         self.output["vs_start"] = self.vs
         self.output["hs_start"] = self.hs
         self.output["fuel_start"] = self.fuel
-        self.output["NN_start"] = self.NN
-        self.output["more_braking_power_start"] = self.more_braking_power
-        self.output["less_braking_power_start"] = self.less_braking_power
-        self.output["maintained_alt_start"] = self.maintained_alt
-        self.output["speed_update_rate"] = self.speed_update_rate
-
+        self.random_parameters["NN"] = self.NN
+        self.random_parameters["more_braking_power"] = self.more_braking_power
+        self.random_parameters["less_braking_power"] = self.less_braking_power
+        self.random_parameters["maintained_alt"] = self.maintained_alt
+        self.random_parameters["speed_update_rate"] = self.speed_update_rate
+        self.random_parameters["slow_enough"] = self.slow_enough
 
     def set_not_random(self):
         self.speed_update_rate = 0.003
@@ -58,8 +61,8 @@ class Bereshit_101:
         self.more_braking_power = 25
         self.less_braking_power = 20
         self.NN = 0.7
+        self.slow_enough = 5
         self.update_output_before_start()
-
 
     def accMax(self, weight: float) -> float:
         return self.acc_fun(weight, True, 8)
@@ -72,7 +75,7 @@ class Bereshit_101:
         ans = t / weight
         return ans
 
-    def __str__(self):
+    def get_info(self):
         return (
             f'time: {self.time}, self.vs: {self.vs}, self.hs: {self.hs}, self.dist: {self.dist}, self.alt: {self.alt}'
             f', ang: {self.ang}, self.weight: {self.weight}, acc: {self.acc}, self.fuel: {self.fuel}')
@@ -83,7 +86,7 @@ class Bereshit_101:
         # ***** main simulation loop ******
         while self.alt > 0:
             # if self.time % 10 == 0 or self.alt < 100:
-            #     print(self)
+            #     print(self.get_info())
             # over 2 km above the ground
             if self.alt > self.maintained_alt:  # maintain a vertical speed of [20-25] m/s
                 if self.vs > self.more_braking_power:
@@ -103,11 +106,11 @@ class Bereshit_101:
                 if self.hs < 2:
                     self.hs = 0
                 if self.alt < 125:  # very close to the ground!
-                    self.NN = 1
+                    self.NN = 0.9
                     if self.vs < self.slow_enough:
                         self.NN = 0.7  # if it is slow enough - go easy on the brakes
 
-            if self.alt < 5 and self.vs < 5:  # no need to stop
+            if self.alt < 5:  # no need to stop
                 self.NN = 0.4
 
             # main computations
@@ -141,14 +144,15 @@ class Bereshit_101:
         self.output["fuel_end"] = self.fuel
         self.simulated = True
         self.fitness = ((2.5 - GR) * self.fuel - (GR * self.vs + self.hs))
+        # if self.vs > 2.5 and self.fitness > 0:
+        #     self.fitness /= 2
+        # print(self.get_info())
 
     def __str__(self):
         return str(self.output)
 
-
     def __hash__(self):
         return hash(str(self))
-
 
     def get_results(self):
         if self.simulated is True:
@@ -159,49 +163,58 @@ class Bereshit_101:
             self.get_results()
 
     def copy_data(self, other):
-        self.more_braking_power = other.output["more_braking_power_start"]
-        self.less_braking_power = other.output["less_braking_power_start"]
-        self.NN = other.output["NN_start"]
-        self.maintained_alt = other.output["maintained_alt_start"]
-        self.speed_update_rate = other.output["speed_update_rate"]
-
+        self.more_braking_power = other.random_parameters["more_braking_power"]
+        self.less_braking_power = other.random_parameters["less_braking_power"]
+        self.NN = other.random_parameters["NN"]
+        self.maintained_alt = other.random_parameters["maintained_alt"]
+        self.speed_update_rate = other.random_parameters["speed_update_rate"]
+        self.slow_enough = other.random_parameters["slow_enough"]
 
     def __eq__(self, other):
         if type(other) is not Bereshit_101:
             return False
-        if self.output["more_braking_power_start"] != other.output["more_braking_power_start"]:
+        if self.random_parameters["more_braking_power"] != other.random_parameters["more_braking_power"]:
             return False
-        if self.output["less_braking_power_start"] != other.output["less_braking_power_start"]:
+        if self.random_parameters["less_braking_power"] != other.random_parameters["less_braking_power"]:
             return False
-        if self.output["NN_start"] == other.output["NN_start"]:
+        if self.random_parameters["NN"] == other.random_parameters["NN"]:
             return False
-        if self.output["maintained_alt_start"] == other.output["maintained_alt_start"]:
+        if self.random_parameters["maintained_alt"] == other.random_parameters["maintained_alt"]:
             return False
-        if self.output["speed_update_rate"] == other.output["speed_update_rate"]:
+        if self.random_parameters["speed_update_rate"] == other.random_parameters["speed_update_rate"]:
+            return False
+        if self.random_parameters["slow_enough"] == other.random_parameters["slow_enough"]:
             return False
         return True
 
     def SinglePointCrossOver(self, parent):
-        childA = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
-        childB = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
-        param = random.randrange(0, 5)
+        childA = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
+                              hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+        childB = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
+                              hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+        param = random.randrange(0, 6)
         childA.copy_data(self)
         childB.copy_data(parent)
         if param == 0:
-            childA.NN = parent.output["NN_start"]
-            childB.NN = self.output["NN_start"]
+            childA.NN = parent.random_parameters["NN"]
+            childB.NN = self.random_parameters["NN"]
         if param == 1:
-            childA.NN = parent.output["maintained_alt_start"]
-            childB.NN = self.output["maintained_alt_start"]
+            childA.maintained_alt = parent.random_parameters["maintained_alt"]
+            childB.maintained_alt = self.random_parameters["maintained_alt"]
         if param == 2:
-            childA.NN = parent.output["speed_update_rate"]
-            childB.NN = self.output["speed_update_rate"]
+            childA.speed_update_rate = parent.random_parameters["speed_update_rate"]
+            childB.speed_update_rate = self.random_parameters["speed_update_rate"]
         if param == 3:
-            childA.NN = parent.output["less_braking_power_start"]
-            childB.NN = self.output["less_braking_power_start"]
+            childA.less_braking_power = parent.random_parameters["less_braking_power"]
+            childB.less_braking_power = self.random_parameters["less_braking_power"]
         if param == 4:
-            childA.NN = parent.output["more_braking_power_start"]
-            childB.NN = self.output["more_braking_power_start"]
+            childA.more = parent.random_parameters["more_braking_power"]
+            childB.more_braking_power = self.random_parameters["more_braking_power"]
+        if param == 5:
+            childA.slow_enough = parent.random_parameters["slow_enough"]
+            childB.slow_enough = self.random_parameters["slow_enough"]
         childA.update_output_before_start()
         childB.update_output_before_start()
         return childA, childB
@@ -210,48 +223,60 @@ class Bereshit_101:
         self.output["vs_start"] = self.vs
         self.output["hs_start"] = self.hs
         self.output["fuel_start"] = self.fuel
-        self.output["NN_start"] = self.NN
-        self.output["more_braking_power_start"] = self.maintained_alt
-        self.output["less_braking_power_start"] = self.less_braking_power
-        self.output["maintained_alt_start"] = self.more_braking_power
-        self.output["speed_update_rate"] = self.speed_update_rate
+        self.random_parameters["NN"] = self.NN
+        self.random_parameters["more_braking_power"] = self.maintained_alt
+        self.random_parameters["less_braking_power"] = self.less_braking_power
+        self.random_parameters["maintained_alt"] = self.more_braking_power
+        self.random_parameters["speed_update_rate"] = self.speed_update_rate
+        self.random_parameters["slow_enough"] = self.slow_enough
 
     def MultiPointCrossOver(self, parent):
-        param1 = random.randrange(0, 5)
-        param2 = random.randrange(0, 5)
+        param1 = random.randrange(0, 6)
+        param2 = random.randrange(0, 6)
         while param1 == param2:
-            param2 = random.randrange(0, 5)
-        childA = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
-        childB = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
+            param2 = random.randrange(0, 6)
+        childA = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
+                              hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+        childB = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
+                              hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
         childA.copy_data(self)
         childB.copy_data(parent)
         if param1 == 0 or param2 == 0:
-            childA.NN = parent.output["NN_start"]
-            childB.NN = self.output["NN_start"]
+            childA.NN = parent.random_parameters["NN"]
+            childB.NN = self.random_parameters["NN"]
         if param1 == 1 or param2 == 1:
-            childA.maintained_alt = parent.output["maintained_alt_start"]
-            childB.maintained_alt = self.output["maintained_alt_start"]
+            childA.maintained_alt = parent.random_parameters["maintained_alt"]
+            childB.maintained_alt = self.random_parameters["maintained_alt"]
         if param1 == 2 or param2 == 2:
-            childA.speed_update_rate = parent.output["speed_update_rate"]
-            childB.speed_update_rate = self.output["speed_update_rate"]
+            childA.speed_update_rate = parent.random_parameters["speed_update_rate"]
+            childB.speed_update_rate = self.random_parameters["speed_update_rate"]
         if param1 == 3 or param2 == 3:
-            childA.less_braking_power = parent.output["less_braking_power_start"]
-            childB.less_braking_power = self.output["less_braking_power_start"]
+            childA.less_braking_power = parent.random_parameters["less_braking_power"]
+            childB.less_braking_power = self.random_parameters["less_braking_power"]
         if param1 == 4 or param2 == 4:
-            childA.more = parent.output["more_braking_power_start"]
-            childB.more_braking_power = self.output["more_braking_power_start"]
+            childA.more = parent.random_parameters["more_braking_power"]
+            childB.more_braking_power = self.random_parameters["more_braking_power"]
+        if param1 == 5 or param2 == 5:
+            childA.slow_enough = parent.random_parameters["slow_enough"]
+            childB.slow_enough = self.random_parameters["slow_enough"]
         childA.update_output_before_start()
         childB.update_output_before_start()
         return childA, childB
 
     def Mutate(self):
-        mutated_childA = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
-        mutated_childB = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
+        mutated_childA = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
+                                      hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
+                                      fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+        mutated_childB = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
+                                      hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
+                                      fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
         mutated_childA.copy_data(self)
         mutated_childB.copy_data(self)
-        param = random.randrange(0, 5)
-        rate = random.uniform(-0.005, 0.005)
-        #prevent rate == 0
+        param = random.randrange(0, 6)
+        rate = 0.01
+        # prevent rate == 0
         if param == 0:
             mutated_childA.NN *= (1 + rate)
             mutated_childB.NN *= (1 - rate)
@@ -267,6 +292,9 @@ class Bereshit_101:
         if param == 4:
             mutated_childA.more_braking_power *= (1 + rate)
             mutated_childB.more_braking_power *= (1 - rate)
+        if param == 5:
+            mutated_childA.slow_enough *= (1 + rate)
+            mutated_childB.slow_enough *= (1 - rate)
         mutated_childA.update_output_before_start()
         mutated_childB.update_output_before_start()
         return mutated_childA, mutated_childB
@@ -274,70 +302,79 @@ class Bereshit_101:
 
 def remove_duplicates(population):
     pop_set = set()
-    for unit in poplulation:
+    for unit in population:
         pop_set.add(unit)
     population.clear()
     for unit in pop_set:
         population.append(unit)
     return population
 
+
 # 14095, 955.5, 24.8, 2.0
 if __name__ == '__main__':
 
     # Create the first unit
-
-    normal = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
-    normal.set_not_random()
-    normal.simulate()
-
-
-    poplulation = []
-    poplulation.append(normal)
-
-
+    alt = 13748
+    vs = 24.8
+    hs = 932
+    dist = 181 * 1000
+    fuel = 121
+    ang = 58.3
+    population_bound = 5000
+    generation_bound = 1000
+    # normal = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
+    # normal.set_not_random()
+    # normal.simulate()
+    #
+    population = []
+    population_best = []
 
     # Generate the first population
 
-    for i in range(10000):
-        spaceship = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
+    for i in range(population_bound):
+        spaceship = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang)
         spaceship.simulate()
         results = spaceship.get_results()
-        if results["fitness"] > 0 and results["fuel"] > 0 and results["hs"] == 0 and results["vs"] < 10:
-            poplulation.append(spaceship)
-
+        # if results["fitness"] > 0 and results["fuel"] > 0 and results["vs"] < 10:
+        population.append(spaceship)
 
     # Generate 1000 Generations
 
-    for gen in range(5000):
-        for unit in poplulation:
+    for gen in range(generation_bound):
+        for unit in population:
             unit.get_results()
-        poplulation = sorted(poplulation, key=lambda x: x.get_results()["fitness"], reverse=True)
-        parentA = poplulation[0]
+        population = sorted(population, key=lambda x: x.get_results()["fitness"], reverse=True)
+        # population_best = [x for x in population if x.get_results()["vs"] <= 2.5 and x.get_results()["hs"] == 0]
+        # population_best = sorted(population_best, key=lambda x: x.get_results()["fuel"], reverse=True)
+        # parentA = population_best[0]
+        parentA = population[0]
         results = parentA.get_results()
         print(
-            f'Generation {gen} poplulation size: {len(poplulation)} best results: fitness:  {results["fitness"]:.12f}, vs: {results["vs"]}, hs: {results["hs"]}, fuel: {results["fuel"]}')
+            f'Generation {gen} population size: {len(population)} best results: fitness:  {results["fitness"]:.12f}, vs: {results["vs"]}, hs: {results["hs"]}, fuel: {results["fuel"]}')
         parent_selection = random.randrange(0, 10)
         parentB = None
-        if 0 <= parent_selection <= 7:
-            parentB = poplulation[1]
+        if 0 <= parent_selection <= 6:
+            parentB = population[1]
+        # elif 5 <= parent_selection <= 8:
+        #     parentB = population_best[0]
         else:
-            selection = random.randrange(1, len(poplulation))
-            parentB = poplulation[selection]
+            selection = random.randrange(1, len(population))
+            parentB = population[selection]
         crossover_selection = random.randrange(0, 99)
-        if 0 <= crossover_selection <= 80:
+        if 0 <= crossover_selection <= 39:
             childA, childB = parentA.SinglePointCrossOver(parentB)
         else:
             childA, childB = parentA.MultiPointCrossOver(parentB)
-        poplulation.append(childA)
-        poplulation.append(childB)
+        population.append(childA)
+        population.append(childB)
         mutation_selection = random.randrange(0, 100)
-        if mutation_selection >= 70:
+        if mutation_selection >= 80:
             mutated_child_A1, mutated_child_A2 = childA.Mutate()
             mutated_child_B1, mutated_child_B2 = childB.Mutate()
-            poplulation.append(mutated_child_A1)
-            poplulation.append(mutated_child_A2)
-            poplulation.append(mutated_child_B1)
-            poplulation.append(mutated_child_B2)
+            population.append(mutated_child_A1)
+            population.append(mutated_child_A2)
+            population.append(mutated_child_B1)
+            population.append(mutated_child_B2)
 
         # remove duplicates
-        poplulation = remove_duplicates(poplulation)
+        population = remove_duplicates(population)
