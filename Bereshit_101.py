@@ -2,14 +2,13 @@
 This class represents the basic flight controller of the Bereshit spacecraft.
 '''
 
-import math
-import random
+import math,random,time
 from builtins import float
 
 import Moon
+from PID import PID_Controller as pid
 
-GR = 1.61803398875
-
+GR = 1.61803398875 # Golden Ration
 
 class Bereshit_101:
     # All this variable type is float.
@@ -23,14 +22,15 @@ class Bereshit_101:
     SECOND_BURN = 0.009  # liter per sec 0.6 liter per m'
     ALL_BURN = MAIN_BURN + 8 * SECOND_BURN
 
-    def __init__(self, alt, vs, hs, dist, fuel, ang):
+    def __init__(self, alt, vs, hs, dist, fuel, ang, p_gain, i_gain, d_gain, desired_val):
         self.vs = vs
         self.hs = hs
         self.alt = alt
         self.dist = dist
         self.fuel = fuel
         self.ang = ang
-        self.input_parameters = {"vs": vs, "hs": hs, "dist": dist, "alt": alt, "fuel": fuel, "ang": ang}
+        self.input_parameters = {"vs": vs, "hs": hs, "dist": dist, "alt": alt, "fuel": fuel, "ang": ang,
+                                 "desired_val": desired_val,"p_gain": p_gain,"i_gain": i_gain, "d_gain": d_gain}
         self.weight = Bereshit_101.WEIGHT_EMP + self.fuel
         self.time = 0
         self.dt = 1
@@ -54,6 +54,13 @@ class Bereshit_101:
         self.random_parameters["maintained_alt"] = self.maintained_alt
         self.random_parameters["speed_update_rate"] = self.speed_update_rate
         self.random_parameters["slow_enough"] = self.slow_enough
+        self.init_pid(desired_val=desired_val, p_gain=p_gain, i_gain=i_gain, d_gain=d_gain)
+
+    def init_pid(self, p_gain, i_gain, d_gain, desired_val):
+        self.p_gain = p_gain
+        self.i_gain = i_gain 
+        self.d_gain = d_gain
+        self.pid = pid(desired_val=desired_val, p_gain=p_gain, i_gain=i_gain, d_gain=d_gain,)
 
     def set_not_random(self):
         self.speed_update_rate = 0.003
@@ -79,39 +86,86 @@ class Bereshit_101:
         return (
             f'time: {self.time}, self.vs: {self.vs}, self.hs: {self.hs}, self.dist: {self.dist}, self.alt: {self.alt}'
             f', ang: {self.ang}, self.weight: {self.weight}, acc: {self.acc}, self.fuel: {self.fuel}')
+    
+    def naive_loop(self):
+        if self.time % 10 == 0 or self.alt < 100:
+             print(self.get_info())
+        # over 2 km above the ground
+        if self.alt > self.maintained_alt:  # maintain a vertical speed of [20-25] m/s
+            if self.vs > self.more_braking_power:
+                self.NN += self.speed_update_rate * self.dt
+            # more power for braking
+            if self.vs < self.less_braking_power:
+                self.NN -= self.speed_update_rate * self.dt
+            # less power for braking
+        # lower than 2 km - horizontal speed should be close to zero
+        else:
+            if self.ang > 3:
+                self.ang -= 3
+            # rotate to vertical position.
+            else:
+                self.ang = 0
+            self.NN = 0.5  # brake slowly, a proper PID controller here is needed!
+            if self.hs < 2:
+                self.hs = 0
+            if self.alt < 125:  # very close to the ground!
+                self.NN = 0.9
+                if self.vs < self.slow_enough:
+                    self.NN = 0.7  # if it is slow enough - go easy on the brakes
+        if self.alt < 5:  # no need to stop
+            self.NN = 0.4
+
+    def pid_loop(self):
+        if self.time % 10 == 0 or self.alt < 100:
+             # print(self.get_info())
+             pass
+        if self.alt > self.maintained_alt:
+            if self.vs > self.more_braking_power:
+                self.NN += self.speed_update_rate * self.dt # more power for braking
+            if self.vs < self.less_braking_power:
+                self.NN -= self.speed_update_rate * self.dt # less power for braking
+        else:
+            if self.ang > 3:
+                self.ang -= 3
+            # rotate to vertical position.
+            else:
+                self.ang = 0
+
+            try:
+                pid_out = self.pid.update(curr_time=time.time(),curr_val=self.alt)
+                if pid_out < 0 : 
+                    # shouldnt happen!!!
+                    pid_out *= -1
+                    self.NN = 0.0
+                else:
+                    sig = self.sigmoid(pid_out)
+                    if sig >= 0.5:
+                        self.NN += self.speed_update_rate * self.dt
+                    else:
+                        self.NN -= self.speed_update_rate * self.dt
+            except:
+                self.NN = 0.5
+
+            if self.hs < 2:
+                self.hs = 0
+            if self.alt < 125:  # very close to the ground!
+                self.NN = 0.9
+                if self.vs < self.slow_enough:
+                    self.NN = 0.7  # if it is slow enough - go easy on the brakes
+        if self.alt < 5:  # no need to stop
+            self.NN = 0.4
+
+    def sigmoid(num):
+        return 1 / (1 + math.pow(math.e,-1.0*num))
 
     def simulate(self):
         # print("Simulating Bereshit's Landing:")
-
         # ***** main simulation loop ******
         while self.alt > 0:
-            # if self.time % 10 == 0 or self.alt < 100:
-            #     print(self.get_info())
-            # over 2 km above the ground
-            if self.alt > self.maintained_alt:  # maintain a vertical speed of [20-25] m/s
-                if self.vs > self.more_braking_power:
-                    self.NN += self.speed_update_rate * self.dt
-                # more power for braking
-                if self.vs < self.less_braking_power:
-                    self.NN -= self.speed_update_rate * self.dt
-                # less power for braking
-            # lower than 2 km - horizontal speed should be close to zero
+            if self.pid is None:
+                self.naive_loop()
             else:
-                if self.ang > 3:
-                    self.ang -= 3
-                # rotate to vertical position.
-                else:
-                    self.ang = 0
-                self.NN = 0.5  # brake slowly, a proper PID controller here is needed!
-                if self.hs < 2:
-                    self.hs = 0
-                if self.alt < 125:  # very close to the ground!
-                    self.NN = 0.9
-                    if self.vs < self.slow_enough:
-                        self.NN = 0.7  # if it is slow enough - go easy on the brakes
-
-            if self.alt < 5:  # no need to stop
-                self.NN = 0.4
+                self.pid_loop()
 
             # main computations
             ang_rad = math.radians(self.ang)
@@ -188,12 +242,19 @@ class Bereshit_101:
         return True
 
     def SinglePointCrossOver(self, parent):
+        if self.input_parameters["p_gain"] is None:
+            print("YES")
+            exit
         childA = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
                               hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
-                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"],
+                              p_gain=self.input_parameters["p_gain"],i_gain=self.input_parameters["i_gain"],
+                              d_gain=self.input_parameters["d_gain"],desired_val=self.input_parameters["desired_val"])
         childB = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
                               hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
-                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"],
+                              p_gain=self.input_parameters["p_gain"],i_gain=self.input_parameters["i_gain"],
+                              d_gain=self.input_parameters["d_gain"],desired_val=self.input_parameters["desired_val"])
         param = random.randrange(0, 6)
         childA.copy_data(self)
         childB.copy_data(parent)
@@ -235,12 +296,19 @@ class Bereshit_101:
         param2 = random.randrange(0, 6)
         while param1 == param2:
             param2 = random.randrange(0, 6)
+        if self.input_parameters["p_gain"] is None:
+            print("YES")
+            exit
         childA = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
                               hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
-                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"],
+                              p_gain=self.input_parameters["p_gain"],i_gain=self.input_parameters["i_gain"],
+                              d_gain=self.input_parameters["d_gain"],desired_val=self.input_parameters["desired_val"])
         childB = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
                               hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
-                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+                              fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"],
+                              p_gain=self.input_parameters["p_gain"],i_gain=self.input_parameters["i_gain"],
+                              d_gain=self.input_parameters["d_gain"],desired_val=self.input_parameters["desired_val"])
         childA.copy_data(self)
         childB.copy_data(parent)
         if param1 == 0 or param2 == 0:
@@ -268,10 +336,14 @@ class Bereshit_101:
     def Mutate(self):
         mutated_childA = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
                                       hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
-                                      fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+                                      fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"],
+                              p_gain=self.input_parameters["p_gain"],i_gain=self.input_parameters["i_gain"],
+                              d_gain=self.input_parameters["d_gain"],desired_val=self.input_parameters["desired_val"])
         mutated_childB = Bereshit_101(alt=self.input_parameters["alt"], vs=self.input_parameters["vs"],
                                       hs=self.input_parameters["hs"], dist=self.input_parameters["dist"],
-                                      fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
+                                      fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"],
+                              p_gain=self.input_parameters["p_gain"],i_gain=self.input_parameters["i_gain"],
+                              d_gain=self.input_parameters["d_gain"],desired_val=self.input_parameters["desired_val"])
         mutated_childA.copy_data(self)
         mutated_childB.copy_data(self)
         param = random.randrange(0, 6)
@@ -320,6 +392,13 @@ if __name__ == '__main__':
     dist = 181 * 1000
     fuel = 121
     ang = 58.3
+    ############ TODO: add these to the genetic model
+    p_gain = 1.0
+    i_gain = 0.0
+    d_gain = 2.5
+    desired_alt= 0.0 # m/s
+    desired_val = desired_alt
+    ############
     population_bound = 5000
     generation_bound = 1000
     # normal = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
@@ -332,7 +411,8 @@ if __name__ == '__main__':
     # Generate the first population
 
     for i in range(population_bound):
-        spaceship = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang)
+        spaceship = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang,
+                                  p_gain=p_gain, i_gain=i_gain,d_gain=d_gain, desired_val= desired_val)
         spaceship.simulate()
         results = spaceship.get_results()
         # if results["fitness"] > 0 and results["fuel"] > 0 and results["vs"] < 10:
