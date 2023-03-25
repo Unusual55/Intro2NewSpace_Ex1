@@ -5,6 +5,8 @@ This class represents the basic flight controller of the Bereshit spacecraft.
 import math
 import random
 from builtins import float
+import matplotlib.pyplot as plt
+import numpy as np
 
 import Moon
 
@@ -35,13 +37,13 @@ class Bereshit_101:
         self.time = 0
         self.dt = 1
         self.acc = 0
-        self.NN = 0.7 + random.uniform(-0.15, 0.15)
-        self.speed_update_rate = 0.003 + random.uniform(-0.002, 0.002)
+        self.NN = 0.7 + random.uniform(-0.1, 0.1)
+        self.speed_update_rate = 0.003 + random.uniform(-0.001, 0.001)
         self.output = dict()
         self.random_parameters = dict()
         self.simulated = False
         self.fitness = 0
-        self.maintained_alt = 2000 + random.randrange(-500, 500)
+        self.maintained_alt = 2000 + random.randrange(-250, 250)
         self.more_braking_power = 25 + random.randrange(0, 5)
         self.less_braking_power = 20 + random.randrange(-2, 2)
         self.slow_enough = 5 + random.randrange(-2, 4)
@@ -81,8 +83,6 @@ class Bereshit_101:
             f', ang: {self.ang}, self.weight: {self.weight}, acc: {self.acc}, self.fuel: {self.fuel}')
 
     def simulate(self):
-        # print("Simulating Bereshit's Landing:")
-
         # ***** main simulation loop ******
         while self.alt > 0:
             # if self.time % 10 == 0 or self.alt < 100:
@@ -106,7 +106,7 @@ class Bereshit_101:
                 if self.hs < 2:
                     self.hs = 0
                 if self.alt < 125:  # very close to the ground!
-                    self.NN = 0.9
+                    self.NN = 1
                     if self.vs < self.slow_enough:
                         self.NN = 0.7  # if it is slow enough - go easy on the brakes
 
@@ -143,10 +143,7 @@ class Bereshit_101:
         self.output["hs_end"] = self.hs
         self.output["fuel_end"] = self.fuel
         self.simulated = True
-        self.fitness = ((2.5 - GR) * self.fuel - (GR * self.vs + self.hs))
-        # if self.vs > 2.5 and self.fitness > 0:
-        #     self.fitness /= 2
-        # print(self.get_info())
+
 
     def __str__(self):
         return str(self.output)
@@ -274,27 +271,30 @@ class Bereshit_101:
                                       fuel=self.input_parameters["fuel"], ang=self.input_parameters["ang"])
         mutated_childA.copy_data(self)
         mutated_childB.copy_data(self)
-        param = random.randrange(0, 6)
-        rate = 0.01
+        params = [x for x in range(0, 6)]
+        rate = 0.05
         # prevent rate == 0
-        if param == 0:
-            mutated_childA.NN *= (1 + rate)
-            mutated_childB.NN *= (1 - rate)
-        if param == 1:
-            mutated_childA.maintained_alt *= (1 + rate)
-            mutated_childB.maintained_alt *= (1 - rate)
-        if param == 2:
-            mutated_childA.speed_update_rate *= (1 + rate)
-            mutated_childB.speed_update_rate *= (1 - rate)
-        if param == 3:
-            mutated_childA.less_braking_power *= (1 + rate)
-            mutated_childB.less_braking_power *= (1 - rate)
-        if param == 4:
-            mutated_childA.more_braking_power *= (1 + rate)
-            mutated_childB.more_braking_power *= (1 - rate)
-        if param == 5:
-            mutated_childA.slow_enough *= (1 + rate)
-            mutated_childB.slow_enough *= (1 - rate)
+        while len(params) > 2:
+            param = random.choice(params)
+            params.remove(param)
+            if param == 0:
+                mutated_childA.NN *= (1 + rate)
+                mutated_childB.NN *= (1 - rate)
+            if param == 1:
+                mutated_childA.maintained_alt *= (1 + rate)
+                mutated_childB.maintained_alt *= (1 - rate)
+            if param == 2:
+                mutated_childA.speed_update_rate *= (1 + rate)
+                mutated_childB.speed_update_rate *= (1 - rate)
+            if param == 3:
+                mutated_childA.less_braking_power *= (1 + rate)
+                mutated_childB.less_braking_power *= (1 - rate)
+            if param == 4:
+                mutated_childA.more_braking_power *= (1 + rate)
+                mutated_childB.more_braking_power *= (1 - rate)
+            if param == 5:
+                mutated_childA.slow_enough *= (1 + rate)
+                mutated_childB.slow_enough *= (1 - rate)
         mutated_childA.update_output_before_start()
         mutated_childB.update_output_before_start()
         return mutated_childA, mutated_childB
@@ -320,23 +320,35 @@ if __name__ == '__main__':
     dist = 181 * 1000
     fuel = 121
     ang = 58.3
-    population_bound = 5000
-    generation_bound = 1000
-    # normal = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
-    # normal.set_not_random()
-    # normal.simulate()
+    population_bound = 100
+    generation_bound = 50
+    normal = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang)
+    normal.set_not_random()
+    normal.simulate()
     #
     population = []
+    population.append(normal)
     population_best = []
+
+    # plt.ion()
+
+
 
     # Generate the first population
 
-    for i in range(population_bound):
+    while len(population) < population_bound:
         spaceship = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang)
         spaceship.simulate()
         results = spaceship.get_results()
-        # if results["fitness"] > 0 and results["fuel"] > 0 and results["vs"] < 10:
-        population.append(spaceship)
+        if results["fitness"] > 0 and results["fuel"] > 0 and results["vs"] < 10 and results["hs"] == 0:
+            population.append(spaceship)
+
+    X_pop = [0]
+    Y_pop = [len(population)]
+    X_fuel = []
+    Y_fuel = []
+    X_fit = []
+    Y_fit = []
 
     # Generate 1000 Generations
 
@@ -344,16 +356,24 @@ if __name__ == '__main__':
         for unit in population:
             unit.get_results()
         population = sorted(population, key=lambda x: x.get_results()["fitness"], reverse=True)
-        # population_best = [x for x in population if x.get_results()["vs"] <= 2.5 and x.get_results()["hs"] == 0]
-        # population_best = sorted(population_best, key=lambda x: x.get_results()["fuel"], reverse=True)
+        population_best = [x for x in population if x.get_results()["vs"] <= 2.5 and x.get_results()["hs"] == 0]
+        population_best = sorted(population_best, key=lambda x: x.get_results()["fuel"], reverse=True)
+        X_fuel.append(gen)
+        Y_fuel.append(population_best[0].get_results()["fuel"])
         # parentA = population_best[0]
         parentA = population[0]
         results = parentA.get_results()
+        X_fit.append(gen)
+        Y_fit.append(parentA.get_results()["fitness"])
+
+        X_pop.append(gen + 1)
+        Y_pop.append(len(population))
+
         print(
             f'Generation {gen} population size: {len(population)} best results: fitness:  {results["fitness"]:.12f}, vs: {results["vs"]}, hs: {results["hs"]}, fuel: {results["fuel"]}')
         parent_selection = random.randrange(0, 10)
         parentB = None
-        if 0 <= parent_selection <= 6:
+        if 0 <= parent_selection <= 7:
             parentB = population[1]
         # elif 5 <= parent_selection <= 8:
         #     parentB = population_best[0]
@@ -361,14 +381,14 @@ if __name__ == '__main__':
             selection = random.randrange(1, len(population))
             parentB = population[selection]
         crossover_selection = random.randrange(0, 99)
-        if 0 <= crossover_selection <= 39:
+        if 0 <= crossover_selection <= 50:
             childA, childB = parentA.SinglePointCrossOver(parentB)
         else:
             childA, childB = parentA.MultiPointCrossOver(parentB)
         population.append(childA)
         population.append(childB)
         mutation_selection = random.randrange(0, 100)
-        if mutation_selection >= 80:
+        if mutation_selection >= 69:
             mutated_child_A1, mutated_child_A2 = childA.Mutate()
             mutated_child_B1, mutated_child_B2 = childB.Mutate()
             population.append(mutated_child_A1)
@@ -378,3 +398,28 @@ if __name__ == '__main__':
 
         # remove duplicates
         population = remove_duplicates(population)
+
+    print(len(population))
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(8, 8))
+    line_fitness, = ax1.plot(X_fit, Y_fit, 'b-')
+    ax1.set_xlabel('Generation')
+    ax1.set_ylabel('Fitness')
+
+    scatter_population = ax2.plot(X_pop, Y_pop, 'r')
+    ax2.set_xlabel('Generation')
+    ax2.set_ylabel('Population Size')
+
+    fuel_plot = ax3.plot(X_fuel, Y_fuel)
+    ax3.set_xlabel('Generation')
+    ax3.set_ylabel('Best Fuel Consumption')
+
+    ax1.relim()
+    ax1.autoscale_view()
+
+    ax2.relim()
+    ax2.autoscale_view()
+
+    ax3.relim()
+    ax3.autoscale_view()
+
+    plt.show()
