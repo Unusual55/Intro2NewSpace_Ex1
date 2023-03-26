@@ -37,7 +37,11 @@ class PID_Controller:
         self.prev_time = 0.0
         self.integral  = 0.0
 
-    def update(self, curr_time, curr_val) -> None | float: # curr_time is input for SOC
+    def update_desired_value(self, new_dv):
+        if new_dv is not None:
+            self.desired_val = new_dv
+
+    def update(self, curr_time, curr_val) -> float:
         '''
         Calculates the current PID given the current time and value/point measurements
         '''
@@ -45,11 +49,11 @@ class PID_Controller:
         if self.prev_time == 0.0: # first measurement
             self.prev_time = curr_time
             self.prev_err  = self.desired_val - curr_val
-            return None
+            return 0.0
 
         dt = curr_time - self.prev_time
         if dt == 0:
-            return None
+            return 0.0
         
         # Calculating the values for PID (without the gain factors)
         

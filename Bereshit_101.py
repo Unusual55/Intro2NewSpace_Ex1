@@ -9,6 +9,8 @@ import Moon
 from PID import PID_Controller as pid
 
 GR = 1.61803398875 # Golden Ration
+INIT_DVS = 24
+
 
 class Bereshit_101:
     # All this variable type is float.
@@ -33,7 +35,7 @@ class Bereshit_101:
                                  "desired_val": desired_val,"p_gain": p_gain,"i_gain": i_gain, "d_gain": d_gain}
         self.weight = Bereshit_101.WEIGHT_EMP + self.fuel
         self.time = 0
-        self.dt = 1
+        self.dt = 1 # TODO play with this param
         self.acc = 0
         self.NN = 0.7 + random.uniform(-0.15, 0.15)
         self.speed_update_rate = 0.003 + random.uniform(-0.002, 0.002)
@@ -87,6 +89,19 @@ class Bereshit_101:
             f'time: {self.time}, self.vs: {self.vs}, self.hs: {self.hs}, self.dist: {self.dist}, self.alt: {self.alt}'
             f', ang: {self.ang}, self.weight: {self.weight}, acc: {self.acc}, self.fuel: {self.fuel}')
     
+    def naive_dvs(self):
+        if self.alt > 700:
+            return INIT_DVS
+        if self.alt > 500:
+            return 16
+        if self.alt > 300:
+            return 12
+        if self.alt > 200:
+            return 6
+        if self.alt > 100:
+            return 3
+        return 1
+    
     def naive_loop(self):
         if self.time % 10 == 0 or self.alt < 100:
              print(self.get_info())
@@ -132,17 +147,9 @@ class Bereshit_101:
                 self.ang = 0
 
             try:
+                self.pid.update_desired_value(self.naive_dvs()) # TODO change to a better dvs function
                 pid_out = self.pid.update(curr_time=time.time(),curr_val=self.alt)
-                if pid_out < 0 : 
-                    # shouldnt happen!!!
-                    pid_out *= -1
-                    self.NN = 0.0
-                else:
-                    sig = self.sigmoid(pid_out)
-                    if sig >= 0.5:
-                        self.NN += self.speed_update_rate * self.dt
-                    else:
-                        self.NN -= self.speed_update_rate * self.dt
+                self.NN += pid_out
             except:
                 self.NN = 0.5
 
@@ -197,10 +204,13 @@ class Bereshit_101:
         self.output["hs_end"] = self.hs
         self.output["fuel_end"] = self.fuel
         self.simulated = True
-        self.fitness = ((2.5 - GR) * self.fuel - (GR * self.vs + self.hs))
+        self.fitness = self.my_fitness()
         # if self.vs > 2.5 and self.fitness > 0:
         #     self.fitness /= 2
         # print(self.get_info())
+
+    def my_fitness(self):
+        return ((2.5 - GR) * self.fuel - (GR * self.vs + self.hs))
 
     def __str__(self):
         return str(self.output)
@@ -392,12 +402,10 @@ if __name__ == '__main__':
     dist = 181 * 1000
     fuel = 121
     ang = 58.3
-    ############ TODO: add these to the genetic model
-    p_gain = 1.0
-    i_gain = 0.0
-    d_gain = 2.5
-    desired_alt= 0.0 # m/s
-    desired_val = desired_alt
+    ############ TODO: add these to the genetic model?
+    p_gain = 0.04
+    i_gain = 0.0003
+    d_gain = 0.2
     ############
     population_bound = 5000
     generation_bound = 1000
@@ -412,7 +420,7 @@ if __name__ == '__main__':
 
     for i in range(population_bound):
         spaceship = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang,
-                                  p_gain=p_gain, i_gain=i_gain,d_gain=d_gain, desired_val= desired_val)
+                                  p_gain=p_gain, i_gain=i_gain,d_gain=d_gain, desired_val= INIT_DVS)
         spaceship.simulate()
         results = spaceship.get_results()
         # if results["fitness"] > 0 and results["fuel"] > 0 and results["vs"] < 10:
