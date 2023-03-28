@@ -35,7 +35,7 @@ class Bereshit_101:
                                  "desired_val": desired_val,"p_gain": p_gain,"i_gain": i_gain, "d_gain": d_gain}
         self.weight = Bereshit_101.WEIGHT_EMP + self.fuel
         self.time = 0
-        self.dt = 1 # TODO play with this param
+        self.dt = 0.25 # was 1.0
         self.acc = 0
         self.NN = 0.7 + random.uniform(-0.15, 0.15)
         self.speed_update_rate = 0.003 + random.uniform(-0.002, 0.002)
@@ -57,6 +57,8 @@ class Bereshit_101:
         self.random_parameters["speed_update_rate"] = self.speed_update_rate
         self.random_parameters["slow_enough"] = self.slow_enough
         self.init_pid(desired_val=desired_val, p_gain=p_gain, i_gain=i_gain, d_gain=d_gain)
+        self.dvs = INIT_DVS
+        self.landing_slope = -1
 
     def init_pid(self, p_gain, i_gain, d_gain, desired_val):
         self.p_gain = p_gain
@@ -102,6 +104,19 @@ class Bereshit_101:
             return 3
         return 1
     
+    def linear_fun(self, m, x, b):
+        '''
+        y = m*x +b
+
+        for this program:
+        
+        x axis - self.dvs,
+        m      - self.landing_slope,
+        b      - default 0
+        '''
+        y = m * x + b
+        return y
+    
     def naive_loop(self):
         if self.time % 10 == 0 or self.alt < 100:
              print(self.get_info())
@@ -135,11 +150,16 @@ class Bereshit_101:
              # print(self.get_info())
              pass
         if self.alt > self.maintained_alt:
+            '''
             if self.vs > self.more_braking_power:
                 self.NN += self.speed_update_rate * self.dt # more power for braking
             if self.vs < self.less_braking_power:
                 self.NN -= self.speed_update_rate * self.dt # less power for braking
+            '''
         else:
+            if self.landing_slope == -1:
+                self.landing_slope = self.vs / self.alt
+
             if self.ang > 3:
                 self.ang -= 3
             # rotate to vertical position.
@@ -147,7 +167,8 @@ class Bereshit_101:
                 self.ang = 0
 
             try:
-                self.pid.update_desired_value(self.naive_dvs()) # TODO change to a better dvs function
+                new_dvs = self.linear_fun(x = self.alt, m = self.landing_slope, b = 1)
+                self.pid.update_desired_value(new_dvs)
                 pid_out = self.pid.update(curr_time=time.time(),curr_val=self.alt)
                 self.NN += pid_out
             except:
@@ -407,7 +428,7 @@ if __name__ == '__main__':
     i_gain = 0.0003
     d_gain = 0.2
     ############
-    population_bound = 5000
+    population_bound = 2000
     generation_bound = 1000
     # normal = Bereshit_101(alt=13748, vs=24.8, hs=932, dist=181 * 1000, fuel=121, ang=58.3)
     # normal.set_not_random()
