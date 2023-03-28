@@ -61,6 +61,16 @@ class Bereshit_101:
         self.init_pid(desired_val=desired_val, p_gain=p_gain, i_gain=i_gain, d_gain=d_gain)
         self.dvs = INIT_DVS
         self.landing_slope = -1
+        self.alt_log  = []
+        self.vs_log   = []
+        self.time_log = []
+        self.fuel_log = []
+
+    def update_logs(self):
+        self.alt_log.append(self.alt)
+        self.vs_log.append(self.vs)
+        self.time_log.append(self.time)
+        self.fuel_log.append(self.fuel)
 
     def init_pid(self, p_gain, i_gain, d_gain, desired_val):
         self.p_gain = p_gain
@@ -92,6 +102,7 @@ class Bereshit_101:
         return (
             f'time: {self.time}, self.vs: {self.vs}, self.hs: {self.hs}, self.dist: {self.dist}, self.alt: {self.alt}'
             f', ang: {self.ang}, self.weight: {self.weight}, acc: {self.acc}, self.fuel: {self.fuel}')
+
     
     def naive_dvs(self):
         if self.alt > 700:
@@ -148,9 +159,8 @@ class Bereshit_101:
             self.NN = 0.4
 
     def pid_loop(self):
-        if self.time % 10 == 0 or self.alt < 100:
-             # print(self.get_info())
-             pass
+        self.update_logs()
+
         if self.alt > self.maintained_alt:
             '''
             if self.vs > self.more_braking_power:
@@ -456,6 +466,7 @@ if __name__ == '__main__':
         if results["fitness"] > 0 and results["fuel"] > 0 and results["vs"] < 10 and results["hs"] == 0:
             population.append(spaceship)
 
+    best_sample = normal
     X_pop = [0]
     Y_pop = [len(population)]
     X_fuel = []
@@ -511,20 +522,22 @@ if __name__ == '__main__':
 
         # remove duplicates
         population = remove_duplicates(population)
+        if gen == generation_bound-1:
+            best_sample = parentA
 
     print(len(population))
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(8, 8))
-    line_fitness, = ax1.plot(X_fit, Y_fit, 'b-')
-    ax1.set_xlabel('Generation')
-    ax1.set_ylabel('Fitness')
+    line_fitness = ax1.plot(best_sample.time_log, best_sample.vs_log, 'b-')
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('Vertical Speed')
 
-    scatter_population = ax2.plot(X_pop, Y_pop, 'r')
-    ax2.set_xlabel('Generation')
-    ax2.set_ylabel('Population Size')
+    alt_plot = ax2.plot(best_sample.time_log, best_sample.alt_log, 'r')
+    ax2.set_xlabel('Time')
+    ax2.set_ylabel('Altitude')
 
-    fuel_plot = ax3.plot(X_fuel, Y_fuel)
-    ax3.set_xlabel('Generation')
-    ax3.set_ylabel('Best Fuel Consumption')
+    fuel_plot = ax3.plot(best_sample.time_log, best_sample.fuel_log)
+    ax3.set_xlabel('Time')
+    ax3.set_ylabel('Fuel')
 
     ax1.relim()
     ax1.autoscale_view()
