@@ -431,9 +431,10 @@ if __name__ == '__main__':
     p_gain = 0.04
     i_gain = 0.0003
     d_gain = 0.2
-    population_bound = 2000
+    population_bound = 500
     generation_bound = 1000
-    normal = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang)
+    normal = Bereshit_101(alt=alt, vs=vs, hs=hs, dist=dist, fuel=fuel, ang=ang,
+                           p_gain=p_gain, i_gain=i_gain,d_gain=d_gain, desired_val= INIT_DVS)
     normal.set_not_random()
     normal.simulate()
     #
